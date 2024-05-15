@@ -3,18 +3,24 @@
 % by evaluating patient symptoms, medical history, and diagnostic tests.
 
 % Define module and necessary libraries
-:- module(diabetes_diagnosis, [diagnose/1, run_tests/0]).
+:- module(diabetes_diagnosis, [diagnose/1, run_tests/0, dynamic_diagnosis/0]).
 :- use_module(library(lists)).
 
+% Declare dynamic predicates
+:- dynamic symptom/2.
+:- dynamic risk_factor/2.
+:- dynamic fasting_blood_sugar/2.
+:- dynamic a1c_level/2.
+
 % Patient symptoms
-% Facts representing common and less common symptoms associated with diabetes.
+% Facts representing common symptoms associated with diabetes.
 symptom(alice, frequent_urination).
 symptom(alice, blurred_vision).
 symptom(alice, increased_hunger).
 symptom(alice, slow_healing_sores).
 symptom(alice, fatigue).
 
-% Extended risk factors
+% Risk factors
 % Facts detailing various risk factors that increase the likelihood of diabetes.
 risk_factor(alice, obesity).
 risk_factor(alice, sedentary_lifestyle).
@@ -25,57 +31,6 @@ risk_factor(alice, high_blood_pressure).
 % Facts representing results from common diagnostic tests for diabetes.
 fasting_blood_sugar(alice, 135).
 a1c_level(alice, 7.0).
-
-% Cholesterol levels
-% Incorporates cholesterol data as part of the risk assessment for diabetes.
-cholesterol_level(john, high).
-cholesterol_level(jane, normal).
-cholesterol_level(bob, high).
-cholesterol_level(mary, high).
-cholesterol_level(alice, high).
-
-% Blood pressure records
-% Additional diagnostic criterion considering the impact of blood pressure on diabetes risk.
-blood_pressure(john, '150/95').
-blood_pressure(jane, '130/85').
-blood_pressure(bob, '160/100').
-blood_pressure(mary, '140/90').
-blood_pressure(alice, '145/90').
-
-% Risk assessment rules
-% Defines rules to assess the diabetes risk based on cholesterol and blood pressure.
-diabetes_risk_assessment(Person, 'High Risk') :-
-    cholesterol_level(Person, high),
-    blood_pressure(Person, BP),
-    split_string(BP, "/", "", [Sys, Dia]),
-    number_string(Systolic, Sys),
-    number_string(Diastolic, Dia),
-    (Systolic > 140; Diastolic > 90).
-
-diabetes_risk_assessment(Person, 'Moderate Risk') :-
-    cholesterol_level(Person, normal),
-    blood_pressure(Person, BP),
-    split_string(BP, "/", "", [Sys, Dia]),
-    number_string(Systolic, Sys),
-    number_string(Diastolic, Dia),
-    (Systolic > 130; Diastolic > 85).
-
-% Fuzzy logic for risk factor severity
-% Enhances the risk factor assessment using fuzzy logic to evaluate severity based on specific criteria.
-fuzzy_risk_factor_severity(obesity, mild).
-fuzzy_risk_factor_severity(obesity, severe) :-
-    write('This individual has a BMI indicating severe obesity, which greatly increases diabetes risk.').
-
-fuzzy_risk_factor_severity(family_history, moderate) :-
-    write('Family history of diabetes moderately increases the risk.').
-
-fuzzy_risk_factor_severity(high_blood_pressure, critical) :-
-    write('High blood pressure is a critical risk factor for diabetes.').
-
-evaluate_fuzzy_risk(Person, RiskFactor) :-
-    risk_factor(Person, RiskFactor),
-    fuzzy_risk_factor_severity(RiskFactor, Severity),
-    format('Risk of diabetes due to ~w is ~w.~n', [RiskFactor, Severity]).
 
 % Diagnosis rules
 % Implements hierarchical checking of diabetes conditions to provide a nuanced diagnosis based on various factors.
@@ -100,27 +55,39 @@ diagnose(Person) :-
     recommendation(Person, 'Consider improving diet, exercise, and regular blood sugar monitoring.').
 
 diagnose(Person) :-
-    borderline_case(Person),
-    format('~w is in a borderline state; further testing is advised.~n', [Person]),
-    recommendation(Person, 'Schedule a comprehensive health checkup and consult with a physician.').
-
-diagnose(Person) :-
     format('~w does not have sufficient evidence to confirm a diabetes diagnosis.~n', [Person]),
     recommendation(Person, 'Maintain a healthy lifestyle and consider preventive screening if symptoms persist.').
 
-% Logging and testing
-% Improves the system's logging capabilities to track diagnostics and recommendations, and implements a testing framework.
+% Helper predicates to determine diabetes severity
+severe_diabetes(Person) :-
+    fasting_blood_sugar(Person, FBS),
+    a1c_level(Person, A1C),
+    FBS > 126,
+    A1C >= 6.5.
 
-% Logs a diagnosis for further analysis and system evaluation.
-log_diagnosis(Person, Diagnosis) :-
-    format('Diagnosis logged for ~w: ~w~n', [Person, Diagnosis]).
+high_risk_diabetes(Person) :-
+    risk_factor(Person, high_blood_pressure),
+    cholesterol_level(Person, high).
 
-% Logs recommendations made by the system.
-log_recommendation(Person, Message) :-
-    format('Logging recommendation for ~w: ~w~n', [Person, Message]).
+diabetes(Person) :-
+    fasting_blood_sugar(Person, FBS),
+    a1c_level(Person, A1C),
+    (FBS > 126; A1C >= 6.5).
+
+prediabetes(Person) :-
+    fasting_blood_sugar(Person, FBS),
+    a1c_level(Person, A1C),
+    FBS =< 126,
+    FBS >= 100,
+    A1C < 6.5,
+    A1C >= 5.7.
+
+% Recommendations based on diagnosis
+recommendation(Person, Message) :-
+    format('Recommendation for ~w: ~w~n', [Person, Message]).
 
 % Test cases
-% Robust test suite to validate the diagnosis rules and logging capabilities.
+% Test suite to validate the diagnosis rules and logging capabilities.
 run_tests :-
     % Patients are hypothetical scenarios used to test the system's accuracy and responsiveness.
     diagnose_and_log(john),
@@ -138,15 +105,10 @@ diagnose_and_log(Person) :-
     log_diagnosis(Person, Diagnosis),
     generate_summary(Person).
 
-% Reflective analysis to enhance understanding and learning from each diagnosis.
-reflect_on_diagnosis(Person) :-
-    (diagnose(Person) ->
-        format('Reflection: Diagnosis of ~w was successful.~n', [Person]),
-        recommendation(Person, 'Please provide additional details if needed.')
-    ; format('Reflection: Diagnosis of ~w faced challenges due to incomplete data.~n', [Person]),
-      recommendation(Person, 'Seek medical testing to clarify results.')).
+% Logs a diagnosis for further analysis and system evaluation.
+log_diagnosis(Person, Diagnosis) :-
+    format('Diagnosis logged for ~w: ~w~n', [Person, Diagnosis]).
 
-% Presentation and visualization for detailed analysis
 % Summarizes the diagnosis, showing symptoms and risk factors involved.
 generate_summary(Person) :-
     findall(S, symptom(Person, S), Symptoms),
@@ -158,13 +120,9 @@ generate_summary(Person) :-
 dynamic_diagnosis :-
     write('Enter the name of the person: '), read(Person),
     write('Enter the fasting blood sugar level: '), read(FBS),
-    write('Enter the A1C level: '), read(A1C),
     assert(fasting_blood_sugar(Person, FBS)),
+    write('Enter the A1C level: '), read(A1C),
     assert(a1c_level(Person, A1C)),
-    write('Enter blood pressure (e.g., "140/90"): '), read(BP),
-    assert(blood_pressure(Person, BP)),
-    write('Enter cholesterol level (normal/high): '), read(Cholesterol),
-    assert(cholesterol_level(Person, Cholesterol)),
     write('Enter the symptoms (end with "end"): '),
     read_symptoms(Person),
     write('Enter the risk factors (end with "end"): '),
@@ -195,5 +153,3 @@ read_risk_factors(Person) :-
 offer_summary(Person) :-
     write('Would you like a summary of the diagnosis? (yes/no): '), read(Answer),
     (Answer == yes -> generate_summary(Person); write('Summary not requested.')).
-
-
